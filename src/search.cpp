@@ -1224,11 +1224,16 @@ moves_loop:  // When in check, search starts here
 
             if (value < singularBeta)
             {
-                int corrValAdj   = std::abs(correctionValue) / 194822;
-                int doubleMargin = -3 + 201 * PvNode - 157 * !ttCapture - corrValAdj
+                int corrValAdj = std::abs(correctionValue) / 194822;
+                int captHistAdj =
+                  ttCapture
+                    ? captureHistory[movedPiece][move.to_sq()][type_of(pos.piece_on(move.to_sq()))]
+                        / 64
+                    : 0;
+                int doubleMargin = -3 + 201 * PvNode - 157 * !ttCapture - captHistAdj - corrValAdj
                                  - 1081 * ttMoveHistory / 117824 - (ss->ply > rootDepth) * 41;
-                int tripleMargin = 72 + 306 * PvNode - 188 * !ttCapture + 84 * ss->ttPv - corrValAdj
-                                 - (ss->ply > rootDepth) * 45;
+                int tripleMargin = 72 + 306 * PvNode - 188 * !ttCapture - captHistAdj + 84 * ss->ttPv
+                                 - corrValAdj - (ss->ply > rootDepth) * 45;
 
                 extension =
                   1 + (value < singularBeta - doubleMargin) + (value < singularBeta - tripleMargin);
