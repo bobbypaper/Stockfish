@@ -1337,6 +1337,10 @@ moves_loop:  // When in check, search starts here
             value         = -search<NonPV>(pos, ss + 1, -(alpha + 1), -alpha, d, true);
             ss->reduction = 0;
 
+            if (value <= alpha && d < newDepth && d <= 1 && value + 5 >= alpha && cutNode
+                && moveCount <= 4)
+                value = -search<NonPV>(pos, ss + 1, -(alpha + 1), -alpha, d + 1, !cutNode);
+
             // Do a full-depth search when reduced LMR search fails high
             // (*Scaler) Shallower searches here don't scale well
             if (value > alpha)
