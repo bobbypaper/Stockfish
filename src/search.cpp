@@ -882,6 +882,8 @@ Value Search::Worker::search(
 
                 if ((ttData.value >= beta) == (-ttDataNext.value >= beta))
                     return ttData.value;
+
+                ttWriter.penalize(1);
             }
             else
                 return ttData.value;
