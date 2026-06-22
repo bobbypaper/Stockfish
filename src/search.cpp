@@ -155,6 +155,35 @@ bool is_shuffling(Move move, Stack* const ss, const Position& pos) {
         && (ss - 2)->currentMove.from_sq() == (ss - 4)->currentMove.to_sq();
 }
 
+struct NormalMoveState {
+    Color    us;
+    Bitboard occupied;
+    Bitboard ourKing;
+    Bitboard theirKing;
+    Bitboard blockersForOurKing;
+    Bitboard blockersForTheirKing;
+
+    NormalMoveState(const Position& pos, Color c) :
+        us(c),
+        occupied(pos.pieces()),
+        ourKing(pos.pieces(c, KING)),
+        theirKing(pos.pieces(~c, KING)),
+        blockersForOurKing(pos.blockers_for_king(c)),
+        blockersForTheirKing(pos.blockers_for_king(~c)) {}
+
+    bool legal(const Position& pos, Square from, Square to, Piece movedPiece) const {
+        if (type_of(movedPiece) == KING)
+            return !pos.attackers_to_exist(to, occupied ^ from, ~us);
+
+        return !(blockersForOurKing & from) || (Attacks::line_bb(from, to) & ourKing);
+    }
+
+    bool gives_check(const Position& pos, Square from, Square to, Piece movedPiece) const {
+        return (pos.check_squares(type_of(movedPiece)) & to)
+            || ((blockersForTheirKing & from) && !(Attacks::line_bb(from, to) & theirKing));
+    }
+};
+
 }  // namespace
 
 Search::Worker::Worker(SharedState&                    sharedState,
@@ -1094,6 +1123,8 @@ moves_loop:  // When in check, search starts here
 
     int moveCount = 0;
 
+    const NormalMoveState normalMoveState(pos, us);
+
     // Step 13. Loop through all pseudo-legal moves until no moves remain
     // or a beta cutoff occurs.
     while ((move = mp.next_move()) != Move::none())
@@ -1103,9 +1134,25 @@ moves_loop:  // When in check, search starts here
         if (move == excludedMove)
             continue;
 
-        // Check for legality
-        if (!pos.legal(move))
-            continue;
+        MoveType moveType = move.type_of();
+        Square   from     = move.from_sq();
+        Square   to       = move.to_sq();
+
+        if (moveType == NORMAL)
+        {
+            movedPiece = pos.moved_piece(move);
+
+            if (!normalMoveState.legal(pos, from, to, movedPiece))
+                continue;
+        }
+        else
+        {
+            // Check for legality
+            if (!pos.legal(move))
+                continue;
+
+            movedPiece = pos.moved_piece(move);
+        }
 
         // At root obey the "searchmoves" option and skip moves not listed in Root
         // Move List. In MultiPV mode we also skip PV moves that have been already
@@ -1124,9 +1171,16 @@ moves_loop:  // When in check, search starts here
             (ss + 1)->pv = nullptr;
 
         extension  = 0;
-        capture    = pos.capture_stage(move);
-        movedPiece = pos.moved_piece(move);
-        givesCheck = pos.gives_check(move);
+        if (moveType == NORMAL)
+        {
+            capture    = !pos.empty(to);
+            givesCheck = normalMoveState.gives_check(pos, from, to, movedPiece);
+        }
+        else
+        {
+            capture    = pos.capture_stage(move);
+            givesCheck = pos.gives_check(move);
+        }
 
         // Calculate new depth for this move
         newDepth = depth - 1;
@@ -1710,17 +1764,37 @@ Value Search::Worker::qsearch(Position& pos, Stack* ss, Value alpha, Value beta)
     MovePicker mp(pos, ttData.move, DEPTH_QS, &mainHistory, &lowPlyHistory, &captureHistory,
                   contHist, &sharedHistory, ss->ply);
 
+    const NormalMoveState normalMoveState(pos, pos.side_to_move());
+
     // Step 5. Loop through all pseudo-legal moves until no moves remain or a beta
     // cutoff occurs.
     while ((move = mp.next_move()) != Move::none())
     {
         assert(move.is_ok());
 
-        if (!pos.legal(move))
+        MoveType moveType = move.type_of();
+        Square   from     = move.from_sq();
+        Square   to       = move.to_sq();
+        Piece    movedPc  = pos.moved_piece(move);
+
+        if (moveType == NORMAL)
+        {
+            if (!normalMoveState.legal(pos, from, to, movedPc))
+                continue;
+        }
+        else if (!pos.legal(move))
             continue;
 
-        givesCheck = pos.gives_check(move);
-        capture    = pos.capture_stage(move);
+        if (moveType == NORMAL)
+        {
+            givesCheck = normalMoveState.gives_check(pos, from, to, movedPc);
+            capture    = !pos.empty(to);
+        }
+        else
+        {
+            givesCheck = pos.gives_check(move);
+            capture    = pos.capture_stage(move);
+        }
 
         moveCount++;
 
