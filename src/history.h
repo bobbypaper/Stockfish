@@ -197,6 +197,8 @@ using TTMoveHistory = StatsEntry<i16, 8192>;
 // on a given NUMA node. The passed size must be a power of two to make
 // the indexing more efficient.
 struct SharedHistories {
+    static constexpr usize ContinuationHistoryShardCount = 4;
+
     SharedHistories(usize threadCount) :
         correctionHistory(threadCount),
         pawnHistory(threadCount) {
@@ -238,7 +240,7 @@ struct SharedHistories {
     }
 
     UnifiedCorrectionHistory correctionHistory;
-    ContinuationHistory      continuationHistory[2][2];
+    ContinuationHistory      continuationHistory[ContinuationHistoryShardCount][2][2];
     PawnHistory              pawnHistory;
 
 
