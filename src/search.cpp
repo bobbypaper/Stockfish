@@ -1323,6 +1323,11 @@ moves_loop:  // When in check, search starts here
         // Decrease/increase reduction for moves with a good/bad history
         r -= ss->statScore * 445 / 4096;
 
+        // Decrease reduction for promotions based on the material gain, which
+        // the capture statScore does not account for
+        if (capture && move.type_of() == PROMOTION)
+            r -= 352 * (PieceValue[move.promotion_type()] - PieceValue[PAWN]) / 1024;
+
         // Scale up reductions for expected ALL nodes
         if (allNode)
             r += r * 272 / (256 * depth + 285);
