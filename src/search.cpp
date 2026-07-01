@@ -1313,8 +1313,14 @@ moves_loop:  // When in check, search starts here
             r = std::max(0, r - 2016);
 
         if (capture)
-            ss->statScore = 809 * int(PieceValue[pos.captured_piece()]) / 128
+        {
+            Value promotionGain = move.type_of() == PROMOTION
+                                    ? PieceValue[move.promotion_type()] - PieceValue[PAWN]
+                                    : VALUE_ZERO;
+
+            ss->statScore = 809 * int(PieceValue[pos.captured_piece()] + promotionGain) / 128
                           + captureHistory[movedPiece][move.to_sq()][type_of(pos.captured_piece())];
+        }
         else
             ss->statScore = 2 * mainHistory[us][move.raw()]
                           + (*contHist[0])[movedPiece][move.to_sq()]
