@@ -189,14 +189,20 @@ constexpr auto index_lut1 = init_index_luts();
 // [attacker][from][to]
 constexpr auto index_lut2 = index_lut2_array();
 
-// Index of a feature for a given king position and another piece on some square
-inline sf_always_inline IndexType FullThreats::make_index(
-  Color perspective, Piece attacker, Square from, Square to, Piece attacked, Square ksq) {
-    const i8 orientation   = OrientTBL[ksq] ^ (56 * perspective);
+struct IndexOrientation {
+    i8 orientation;
+    i8 swap;
+};
+
+inline sf_always_inline IndexOrientation make_index_orientation(Color perspective, Square ksq) {
+    return {i8(FullThreats::OrientTBL[ksq] ^ (56 * perspective)), i8(8 * perspective)};
+}
+
+inline sf_always_inline IndexType make_index_oriented(
+  i8 orientation, i8 swap, Piece attacker, Square from, Square to, Piece attacked) {
     unsigned from_oriented = u8(from) ^ orientation;
     unsigned to_oriented   = u8(to) ^ orientation;
 
-    i8       swap              = 8 * perspective;
     unsigned attacker_oriented = attacker ^ swap;
     unsigned attacked_oriented = attacked ^ swap;
 
@@ -208,9 +214,12 @@ inline sf_always_inline IndexType FullThreats::make_index(
 // Get a list of indices for active features in ascending order
 
 void FullThreats::append_active_indices(Color perspective, const Position& pos, IndexList& active) {
-    const Square   ksq      = pos.square<KING>(perspective);
-    const Bitboard occupied = pos.pieces();
-    const Bitboard pawns    = pos.pieces(PAWN);
+    const Square           ksq              = pos.square<KING>(perspective);
+    const Bitboard         occupied         = pos.pieces();
+    const Bitboard         pawns            = pos.pieces(PAWN);
+    const IndexOrientation indexOrientation = make_index_orientation(perspective, ksq);
+    const i8               orientation      = indexOrientation.orientation;
+    const i8               swap             = indexOrientation.swap;
 
     const Bitboard pawnTargets        = pos.pieces(PAWN, KNIGHT, ROOK);
     const Bitboard minorSliderTargets = pos.pieces(PAWN, KNIGHT, BISHOP, ROOK);
@@ -233,7 +242,8 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
                     Square from     = to - attkDir;
                     Piece  attacked = pos.piece_on(to);
                     assert(file_of(from) != file_of(to) || type_of(attacked) == PAWN);
-                    IndexType index = make_index(perspective, attacker, from, to, attacked, ksq);
+                    IndexType index =
+                      make_index_oriented(orientation, swap, attacker, from, to, attacked);
                     active.push_back_if_lt(index, Dimensions);
                 }
             };
@@ -265,7 +275,8 @@ void FullThreats::append_active_indices(Color perspective, const Position& pos, 
                 {
                     Square    to       = pop_lsb(attacks);
                     Piece     attacked = pos.piece_on(to);
-                    IndexType index    = make_index(perspective, attacker, from, to, attacked, ksq);
+                    IndexType index =
+                      make_index_oriented(orientation, swap, attacker, from, to, attacked);
                     active.push_back_if_lt(index, Dimensions);
                 }
             }
@@ -282,6 +293,9 @@ void FullThreats::append_changed_indices(Color                   perspective,
                                          IndexList&              added,
                                          const ThreatWeightType* prefetchBase,
                                          IndexType               prefetchStride) {
+    const IndexOrientation indexOrientation = make_index_orientation(perspective, ksq);
+    const i8               orientation      = indexOrientation.orientation;
+    const i8               swap             = indexOrientation.swap;
 
     for (const auto& dirty : diff.list)
     {
@@ -292,7 +306,8 @@ void FullThreats::append_changed_indices(Color                   perspective,
         auto add      = dirty.add();
 
         auto&           insert = add ? added : removed;
-        const IndexType index  = make_index(perspective, attacker, from, to, attacked, ksq);
+        const IndexType index =
+          make_index_oriented(orientation, swap, attacker, from, to, attacked);
 
         if (prefetchBase)
             prefetch<PrefetchRw::READ, PrefetchLoc::LOW>(reinterpret_cast<const void*>(

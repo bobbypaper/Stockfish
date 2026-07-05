@@ -68,9 +68,6 @@ class FullThreats {
     using IndexList                                = ValueList<IndexType, MaxActiveDimensions>;
     using DiffType                                 = DirtyThreats;
 
-    static IndexType
-    make_index(Color perspective, Piece attkr, Square from, Square to, Piece attkd, Square ksq);
-
     // Get a list of indices for active features
     static void append_active_indices(Color perspective, const Position& pos, IndexList& active);
 
