@@ -155,6 +155,32 @@ bool is_shuffling(Move move, Stack* const ss, const Position& pos) {
         && (ss - 2)->currentMove.from_sq() == (ss - 4)->currentMove.to_sq();
 }
 
+bool creates_advanced_passed_pawn(const Position& pos, Move move, Piece movedPiece) {
+    if (move.type_of() != NORMAL || type_of(movedPiece) != PAWN)
+        return false;
+
+    const Color  us = color_of(movedPiece);
+    const Square to = move.to_sq();
+
+    if (to != move.from_sq() + pawn_push(us) || relative_rank(us, to) < RANK_6)
+        return false;
+
+    Bitboard files = file_bb(to);
+
+    if (file_of(to) > FILE_A)
+        files |= file_bb(File(file_of(to) - 1));
+    if (file_of(to) < FILE_H)
+        files |= file_bb(File(file_of(to) + 1));
+
+    Bitboard enemyPawns = pos.pieces(~us, PAWN) & files;
+
+    while (enemyPawns)
+        if (relative_rank(us, pop_lsb(enemyPawns)) > relative_rank(us, to))
+            return false;
+
+    return true;
+}
+
 }  // namespace
 
 Search::Worker::Worker(SharedState&                    sharedState,
@@ -1322,6 +1348,9 @@ moves_loop:  // When in check, search starts here
 
         // Decrease/increase reduction for moves with a good/bad history
         r -= ss->statScore * 445 / 4096;
+
+        if (!capture && !givesCheck && creates_advanced_passed_pawn(pos, move, movedPiece))
+            r = std::max(0, r - 1024);
 
         // Scale up reductions for expected ALL nodes
         if (allNode)
