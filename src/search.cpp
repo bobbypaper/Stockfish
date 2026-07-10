@@ -696,6 +696,7 @@ Value Search::Worker::search(
     Value bestValue, value, eval, maxValue, probCutBeta;
     bool  givesCheck, improving, priorCapture, opponentWorsening;
     bool  capture, ttCapture;
+    bool  correctionRaisesEvalOverBeta = false;
     int   priorReduction;
     Piece movedPiece;
 
@@ -995,7 +996,9 @@ Value Search::Worker::search(
     // Step 11. ProbCut
     // If we have a good enough capture (or queen promotion) and a reduced search
     // returns a value much above beta, we can (almost) safely prune the previous move.
-    probCutBeta = beta + 214 - 59 * improving;
+    correctionRaisesEvalOverBeta =
+      is_valid(unadjustedStaticEval) && unadjustedStaticEval < beta && ss->staticEval >= beta;
+    probCutBeta = beta + 214 - 59 * improving + 32 * correctionRaisesEvalOverBeta;
     if (depth >= 3
         && !is_decisive(beta)
         // If value from transposition table is lower than probCutBeta, don't attempt
