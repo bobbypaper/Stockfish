@@ -92,6 +92,11 @@ struct TTEntry {
 void TTEntry::save(
   Key k, Value v, bool pv, Bound b, Depth d, Move m, Value ev, u8 curr_generation) {
 
+    // Do not evict a more valuable entry for a weaker inexact collision.
+    if (b != BOUND_EXACT && u16(k) != key16
+        && d - DEPTH_NONE + 2 * pv < depth8 - 8 * relative_age(curr_generation))
+        return;
+
     // Preserve the old ttmove if we don't have a new one
     if (m || u16(k) != key16)
         move16 = m;
