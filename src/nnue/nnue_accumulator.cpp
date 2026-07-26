@@ -587,26 +587,21 @@ void update_accumulator_hybrid(Color                     perspective,
     const Square newKsq = dirtyPiece.to;
     assert(oldKsq != newKsq);
 
-    const auto& currentPieces  = pos.piece_array();
-    auto        previousPieces = currentPieces;  // copies 64 bytes!
-
+    const auto& currentPieces = pos.piece_array();
+    const Piece previousNewPiece =
+      dirtyPiece.remove_sq != SQ_NONE ? dirtyPiece.remove_pc : NO_PIECE;
     Bitboard previousPieceBB = pos.pieces();
 
-    assert(previousPieces[newKsq] == dirtyPiece.pc);
+    assert(currentPieces[newKsq] == dirtyPiece.pc);
+    assert(currentPieces[oldKsq] == NO_PIECE);
 
     if (dirtyPiece.remove_sq != SQ_NONE)
-    {
         assert(dirtyPiece.remove_sq == newKsq);
-        previousPieces[newKsq] = dirtyPiece.remove_pc;
-    }
     else
     {
-        previousPieces[newKsq] = NO_PIECE;
         previousPieceBB &= ~square_bb(newKsq);
     }
 
-    assert(previousPieces[oldKsq] == NO_PIECE);
-    previousPieces[oldKsq] = make_piece(perspective, KING);
     previousPieceBB |= square_bb(oldKsq);
 
     const auto& oldEntry = cache[oldKsq][perspective];
@@ -616,7 +611,20 @@ void update_accumulator_hybrid(Color                     perspective,
     // "Add" means add them to the entry to get the accumulator we want
     PSQFeatureSet::IndexList oldRemove, oldAdd, newRemove, newAdd;
 
-    Bitboard oldChangedBB = get_changed_pieces(oldEntry.pieces, previousPieces);
+#if defined(USE_AVX512ICL)
+    auto previousPieces    = currentPieces;
+    previousPieces[newKsq] = previousNewPiece;
+    previousPieces[oldKsq] = dirtyPiece.pc;
+    Bitboard oldChangedBB  = get_changed_pieces(oldEntry.pieces, previousPieces);
+#else
+    Bitboard oldChangedBB = get_changed_pieces(oldEntry.pieces, currentPieces);
+
+    const Bitboard kingMoveSquares = square_bb(oldKsq) | square_bb(newKsq);
+    oldChangedBB &= ~kingMoveSquares;
+    oldChangedBB |= Bitboard(oldEntry.pieces[oldKsq] != dirtyPiece.pc) << oldKsq;
+    oldChangedBB |= Bitboard(oldEntry.pieces[newKsq] != previousNewPiece) << newKsq;
+#endif
+
     Bitboard oldRemovedBB = oldChangedBB & oldEntry.pieceBB;
     Bitboard oldAddedBB   = oldChangedBB & previousPieceBB;
 
@@ -639,7 +647,12 @@ void update_accumulator_hybrid(Color                     perspective,
     while (oldAddedBB)
     {
         Square sq = pop_lsb(oldAddedBB);
-        oldAdd.push_back(PSQFeatureSet::make_index(perspective, sq, previousPieces[sq], oldKsq));
+        Piece  pc = currentPieces[sq];
+        if (sq == oldKsq)
+            pc = dirtyPiece.pc;
+        else if (sq == newKsq)
+            pc = previousNewPiece;
+        oldAdd.push_back(PSQFeatureSet::make_index(perspective, sq, pc, oldKsq));
     }
     while (newRemovedBB)
     {
