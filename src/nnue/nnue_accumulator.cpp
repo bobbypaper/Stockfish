@@ -934,7 +934,8 @@ void update_accumulator_refresh_cache(Color                     perspective,
     auto&                    entry = cache[ksq][perspective];
     PSQFeatureSet::IndexList removed, added;
 
-    const Bitboard changedBB = get_changed_pieces(entry.pieces, pos.piece_array());
+    const auto&    currentPieces = pos.piece_array();
+    const Bitboard changedBB     = get_changed_pieces(entry.pieces, currentPieces);
     Bitboard       removedBB = changedBB & entry.pieceBB;
     Bitboard       addedBB   = changedBB & pos.pieces();
 
@@ -955,7 +956,11 @@ void update_accumulator_refresh_cache(Color                     perspective,
 #endif
 
     entry.pieceBB = pos.pieces();
-    entry.pieces  = pos.piece_array();
+    for (Bitboard updatedBB = changedBB; updatedBB;)
+    {
+        const Square sq = pop_lsb(updatedBB);
+        entry.pieces[sq] = currentPieces[sq];
+    }
 
     ThreatFeatureSet::IndexList active;
     ThreatFeatureSet::append_active_indices(perspective, pos, active);
