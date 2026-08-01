@@ -1016,6 +1016,7 @@ void Position::do_move(Move                      m,
         prefetch(&history->minor_piece_correction_entry(*this));
         prefetch(&history->nonpawn_correction_entry<WHITE>(*this));
         prefetch(&history->nonpawn_correction_entry<BLACK>(*this));
+        prefetch(&history->joint_nonpawn_correction_entry(*this));
     }
 
     // Move the piece. The tricky Chess960 castling is handled earlier
